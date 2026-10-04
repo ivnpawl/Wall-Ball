@@ -677,6 +677,38 @@ async function addTour(){
 }
 function editTour(i){let t=shellData.tournaments[i];modal(`<h2>Редактировать турнир</h2><div class="field"><label>Название</label><input id="en" value="${escShell(t.name)}"></div><div class="field"><label>Формат</label><select id="ef" onchange="toggleAwardField('ef','eas')"><option ${t.format==='Карусель'?'selected':''}>Карусель</option><option ${t.format==='Карусель Рандом'?'selected':''}>Карусель Рандом</option><option ${t.format==='Царь горы'?'selected':''}>Царь горы</option></select></div>${awardSchemeField('eas',t.awardScheme||'hard1-3_light4-6')}<div class="field"><label>Дата и время</label><input id="ed" type="datetime-local" value="${escShell(t.dateRaw||'')}"></div><div class="field"><label>Количество команд</label><input id="ec" type="number" value="${escShell(t.count)}"></div><div class="field"><label>Количество кортов</label><input id="eco" type="number" value="${escShell(t.courts)}"></div><div class="modalActions"><button onclick="closeShellModal()">Отмена</button><button class="primary" onclick="saveTourEdit(${i})">Сохранить</button></div>`);toggleAwardField('ef','eas')}
 function saveTourEdit(i){let t=shellData.tournaments[i];t.name=document.getElementById('en').value.trim()||t.name;t.format=document.getElementById('ef').value;let raw=document.getElementById('ed').value;t.dateRaw=raw;t.date=raw?new Date(raw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';t.count=document.getElementById('ec').value;t.courts=document.getElementById('eco').value;t.awardScheme=isCarouselFormat(t.format)?document.getElementById('eas').value:'';shellSave();closeShellModal();renderShell()}
+// V59: keep participant tournament list in sync with Supabase deletions.
+// If the creator deletes a tournament remotely, remove the participant's cached card too.
+let participantListSyncBusy=false;
+async function syncParticipantTournamentList(){
+  if(participantListSyncBusy || document.body.classList.contains('legacyMode')) return;
+  const joined=shellData.tournaments.filter(t=>t&&t.code&&t.accessRole==='participant');
+  if(!joined.length) return;
+  participantListSyncBusy=true;
+  try{
+    const checks=await Promise.all(joined.map(async t=>{
+      try{
+        const rows=await supaRequest('?code=eq.'+encodeURIComponent(t.code)+'&select=code&limit=1');
+        return {code:String(t.code),exists:!!(rows&&rows.length)};
+      }catch(e){
+        console.error('Supabase participant list refresh:',e);
+        return {code:String(t.code),exists:true}; // network error must not delete a local card
+      }
+    }));
+    const deleted=new Set(checks.filter(x=>!x.exists).map(x=>x.code));
+    if(deleted.size){
+      shellData.tournaments=shellData.tournaments.filter(t=>!(t&&t.accessRole==='participant'&&deleted.has(String(t.code))));
+      localStorage.setItem(SHELLKEY,JSON.stringify(shellData));
+      renderShell();
+    }
+  }finally{
+    participantListSyncBusy=false;
+  }
+}
+let participantListSyncTimer=setInterval(syncParticipantTournamentList,3000);
+window.addEventListener('focus',syncParticipantTournamentList);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncParticipantTournamentList()});
+
 function enterLegacy(i){
   currentTournamentIndex=i;
   const t=shellData.tournaments[i]||{};
@@ -721,6 +753,7 @@ function leaveLegacy(){
   window.scrollTo(0,0)
 }
 renderShell();
+syncParticipantTournamentList();
 loadShellRemote();
 </script>
 </body>
