@@ -463,7 +463,9 @@ function queueRemoteSave(){
   clearTimeout(remoteSaveTimer);
   remoteSaveTimer=setTimeout(async()=>{
     try{
-      await supaRequest('?code=eq.'+encodeURIComponent(t.code),{
+      const existing=await supaRequest('?code=eq.'+encodeURIComponent(t.code)+'&select=state&limit=1');
+      if(!existing||!existing.length||existing[0].state?.deleted)return;
+      await supaRequest('?code=eq.'+encodeURIComponent(t.code)+'&state->>deleted=is.null',{
         method:'PATCH',
         headers:{'Prefer':'return=minimal'},
         body:JSON.stringify({state:remoteState()})
@@ -497,7 +499,7 @@ async function joinRemoteTournament(){
   if(code.length!==3){alert('Введите 3-значный код.');return}
   try{
     const rows=await supaRequest('?code=eq.'+encodeURIComponent(code)+'&select=code,state&limit=1');
-    if(!rows||!rows.length){alert('Турнир с таким кодом не найден.');return}
+    if(!rows||!rows.length||rows[0].state?.deleted){alert('Турнир с таким кодом не найден или удалён организатором.');return}
     const st=rows[0].state||{}, t=st.tournament||{name:'Турнир',format:'Карусель',count:16,courts:4};
     t.code=code;
     t.accessRole='participant';
@@ -527,7 +529,7 @@ async function pollRemoteTournament(){
   if(!t||!t.code)return;
   try{
     const rows=await supaRequest('?code=eq.'+encodeURIComponent(t.code)+'&select=state&limit=1');
-    if(!rows||!rows.length){
+    if(!rows||!rows.length||rows[0].state?.deleted){
       const deletedCode=t.code;
       shellData.tournaments=shellData.tournaments.filter(x=>x.code!==deletedCode);
       localStorage.setItem(SHELLKEY,JSON.stringify(shellData));
@@ -627,35 +629,53 @@ function saveTeamEdit(i){let a=getTeamPerson('teamA'),b=getTeamPerson('teamB');i
 function delTeam(i){if(confirm('Удалить команду?')){shellData.teams.splice(i,1);shellSave();closeShellModal();renderShell()}}
 function tourMenu(i){modal(`<h2>${escShell(shellData.tournaments[i].name)}</h2><button style="width:100%;text-align:left;margin:5px 0" onclick="editTour(${i})">Редактировать</button><button class="dangerText" style="width:100%;text-align:left;margin:5px 0" onclick="deleteTour(${i})">Удалить</button>`)}
 function editTour(i){let t=shellData.tournaments[i];modal(`<h2>Редактировать турнир</h2><div class="field"><label>Название</label><input id="en" value="${escShell(t.name)}"></div><div class="field"><label>Дата и время</label><input id="ed" type="datetime-local" value="${escShell(t.dateRaw||'')}"></div><div class="field"><label>Количество команд</label><input id="ec" type="number" value="${escShell(t.count)}"></div><div class="field"><label>Количество кортов</label><input id="eco" type="number" value="${escShell(t.courts)}"></div><div class="modalActions"><button onclick="closeShellModal()">Отмена</button><button class="primary" onclick="saveTourEdit(${i})">Сохранить</button></div>`)}function saveTourEdit(i){let t=shellData.tournaments[i];t.name=document.getElementById('en').value.trim()||t.name;let raw=document.getElementById('ed').value;t.dateRaw=raw;t.date=raw?new Date(raw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';t.count=document.getElementById('ec').value;t.courts=document.getElementById('eco').value;shellSave();closeShellModal();renderShell()}async function deleteTour(i){
-  if(!confirm('Удалить турнир?'))return;
   const t=shellData.tournaments[i];
+  if(!t||!confirm('Удалить турнир?'))return;
   try{
-    if(t&&t.code&&t.accessRole!=='participant'){
-      await supaRequest('?code=eq.'+encodeURIComponent(t.code),{method:'DELETE',headers:{'Prefer':'return=minimal'}});
+    if(t.code&&t.accessRole!=='participant'){
+      clearTimeout(remoteSaveTimer);
+      const path='?code=eq.'+encodeURIComponent(t.code);
+      const rows=await supaRequest(path+'&select=state&limit=1');
+      if(rows&&rows.length){
+        const state=Object.assign({},rows[0].state||{},{deleted:true,deletedAt:new Date().toISOString()});
+        await supaRequest(path,{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify({state})});
+        const check=await supaRequest(path+'&select=state&limit=1');
+        if(check&&check.length&&!check[0].state?.deleted)throw new Error('Сервер не подтвердил удаление. Проверьте разрешение UPDATE таблицы tournaments в Supabase.');
+      }
     }
-    shellData.tournaments.splice(i,1);
+    const active=shellData.tournaments[currentTournamentIndex];
+    shellData.tournaments=shellData.tournaments.filter(x=>x!==t);
+    if(active===t){stopRemotePolling();currentTournamentIndex=-1;document.body.classList.remove('legacyMode')}
+    else currentTournamentIndex=active?shellData.tournaments.indexOf(active):-1;
     localStorage.setItem(SHELLKEY,JSON.stringify(shellData));
     closeShellModal();renderShell();
-  }catch(e){
-    alert('Не удалось удалить турнир для участников: '+e.message);
-  }
+  }catch(e){alert('Не удалось удалить турнир для участников: '+e.message)}
 }
 function openTourModal(){modal(`<h2>Создать турнир</h2><div class="field"><label>Название турнира</label><input id="tn" placeholder="Например, Вечерняя карусель"></div><div class="field"><label>Формат</label><select id="tf"><option>Карусель</option><option>Карусель Рандом</option><option>Царь горы</option></select></div><div class="field"><label>Дата и время</label><input id="td" type="datetime-local"></div><div class="field"><label>Количество команд</label><input id="tc" type="number" min="2" value="16"></div><div class="field"><label>Количество кортов</label><input id="tco" type="number" min="1" value="4"></div><div class="modalActions"><button onclick="closeShellModal()">Отмена</button><button class="primary" onclick="addTour()">Создать</button></div>`)}
 function addTour(){let name=document.getElementById('tn').value.trim();if(!name){alert('Введите название турнира.');return}let raw=document.getElementById('td').value;let date=raw?new Date(raw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';shellData.tournaments.unshift({name,format:document.getElementById('tf').value,date,dateRaw:raw,count:document.getElementById('tc').value,courts:document.getElementById('tco').value});shellSave();closeShellModal();renderShell()}
 function tourMenu(i){modal(`<h2>${escShell(shellData.tournaments[i].name)}</h2><button style="width:100%;text-align:left;margin:5px 0" onclick="editTour(${i})">Редактировать</button><button class="dangerText" style="width:100%;text-align:left;margin:5px 0" onclick="deleteTour(${i})">Удалить</button>`)}
 function editTour(i){let t=shellData.tournaments[i];modal(`<h2>Редактировать турнир</h2><div class="field"><label>Название</label><input id="en" value="${escShell(t.name)}"></div><div class="field"><label>Дата и время</label><input id="ed" type="datetime-local" value="${escShell(t.dateRaw||'')}"></div><div class="field"><label>Количество команд</label><input id="ec" type="number" value="${escShell(t.count)}"></div><div class="field"><label>Количество кортов</label><input id="eco" type="number" value="${escShell(t.courts)}"></div><div class="modalActions"><button onclick="closeShellModal()">Отмена</button><button class="primary" onclick="saveTourEdit(${i})">Сохранить</button></div>`)}function saveTourEdit(i){let t=shellData.tournaments[i];t.name=document.getElementById('en').value.trim()||t.name;let raw=document.getElementById('ed').value;t.dateRaw=raw;t.date=raw?new Date(raw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';t.count=document.getElementById('ec').value;t.courts=document.getElementById('eco').value;shellSave();closeShellModal();renderShell()}async function deleteTour(i){
-  if(!confirm('Удалить турнир?'))return;
   const t=shellData.tournaments[i];
+  if(!t||!confirm('Удалить турнир?'))return;
   try{
-    if(t&&t.code&&t.accessRole!=='participant'){
-      await supaRequest('?code=eq.'+encodeURIComponent(t.code),{method:'DELETE',headers:{'Prefer':'return=minimal'}});
+    if(t.code&&t.accessRole!=='participant'){
+      clearTimeout(remoteSaveTimer);
+      const path='?code=eq.'+encodeURIComponent(t.code);
+      const rows=await supaRequest(path+'&select=state&limit=1');
+      if(rows&&rows.length){
+        const state=Object.assign({},rows[0].state||{},{deleted:true,deletedAt:new Date().toISOString()});
+        await supaRequest(path,{method:'PATCH',headers:{'Prefer':'return=representation'},body:JSON.stringify({state})});
+        const check=await supaRequest(path+'&select=state&limit=1');
+        if(check&&check.length&&!check[0].state?.deleted)throw new Error('Сервер не подтвердил удаление. Проверьте разрешение UPDATE таблицы tournaments в Supabase.');
+      }
     }
-    shellData.tournaments.splice(i,1);
+    const active=shellData.tournaments[currentTournamentIndex];
+    shellData.tournaments=shellData.tournaments.filter(x=>x!==t);
+    if(active===t){stopRemotePolling();currentTournamentIndex=-1;document.body.classList.remove('legacyMode')}
+    else currentTournamentIndex=active?shellData.tournaments.indexOf(active):-1;
     localStorage.setItem(SHELLKEY,JSON.stringify(shellData));
     closeShellModal();renderShell();
-  }catch(e){
-    alert('Не удалось удалить турнир для участников: '+e.message);
-  }
+  }catch(e){alert('Не удалось удалить турнир для участников: '+e.message)}
 }
 function awardSchemeField(id,value='hard1-3_light4-6'){
  return `<div class="field" id="${id}Wrap"><label>Схема награждения</label><select id="${id}"><option value="hard1-3_light4-6" ${value==='hard1-3_light4-6'?'selected':''}>Hard 1–3 · Light 4–6</option><option value="hard1-3_light9-11" ${value==='hard1-3_light9-11'?'selected':''}>Hard 1–3 · Light 9–11</option></select></div>`;
@@ -688,8 +708,8 @@ async function syncParticipantTournamentList(){
   try{
     const checks=await Promise.all(joined.map(async t=>{
       try{
-        const rows=await supaRequest('?code=eq.'+encodeURIComponent(t.code)+'&select=code&limit=1');
-        return {code:String(t.code),exists:!!(rows&&rows.length)};
+        const rows=await supaRequest('?code=eq.'+encodeURIComponent(t.code)+'&select=code,state&limit=1');
+        return {code:String(t.code),exists:!!(rows&&rows.length&&!rows[0].state?.deleted)};
       }catch(e){
         console.error('Supabase participant list refresh:',e);
         return {code:String(t.code),exists:true}; // network error must not delete a local card
