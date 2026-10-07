@@ -75,6 +75,56 @@ body.legacyMode #legacyApp header .head .brand{min-height:64px!important;overflo
 body.legacyMode #legacyApp header .head .brand>img.brandmark{display:block!important;width:56px!important;height:56px!important;min-width:56px!important;min-height:56px!important;max-width:56px!important;max-height:56px!important;flex:0 0 56px!important;padding:0!important;margin:0!important;object-fit:contain!important;object-position:50% 50%!important;border-radius:0!important;clip-path:none!important;transform:none!important}
 @media(max-width:720px){body.legacyMode #legacyApp header .head .brand>img.brandmark{width:56px!important;height:56px!important;min-width:56px!important;min-height:56px!important;max-width:56px!important;max-height:56px!important;flex-basis:56px!important}}
 </style>
+
+<style id="wallball-v61-tsar-theme">
+/* Shared visual palette with Tsar Gory; screen styles only. */
+@media screen {
+ :root{--bg:#f8f7fb;--card:#fff;--line:#ebe7f1;--text:#211d2b;--muted:#7b7588;--dark:#5830d8;--accent:#6d3df5;--soft:#f2edff}
+ body,#appShell{background:var(--bg);color:var(--text)}
+ header,.shellTop{background:rgba(255,255,255,.94);color:var(--text);border-bottom:1px solid var(--line);backdrop-filter:blur(12px)}
+ .sub,.shellSub,.month,.meta,.empty,.field label{color:var(--muted)}
+ .shellSub{opacity:1}
+ .card,.tourCard,.listCard,.winnerGroup,.printdialog{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 24px rgba(45,32,74,.05)}
+ button,select,input{border-color:var(--line);border-radius:12px;color:var(--text)}
+ button{font-weight:650}
+ .primary,.fab,.roundPlus{background:var(--accent);border-color:var(--accent);color:#fff}
+ .fab{box-shadow:0 6px 18px rgba(109,61,245,.25);padding:0;font-size:0;line-height:1}
+ .fab:before,.fab:after{content:"";position:absolute;left:50%;top:50%;width:22px;height:4px;border-radius:2px;background:currentColor;transform:translate(-50%,-50%);pointer-events:none}
+ .fab:after{transform:translate(-50%,-50%) rotate(90deg)}
+ .fab,.roundPlus{border-radius:50%}
+ .active,.bottomNav button.on{background:var(--soft);border-color:#d9ccff;color:var(--dark);font-weight:650}
+ .formatPill{color:var(--accent)}
+ .badge{background:var(--soft);color:var(--dark);font-weight:700}
+ .bottomNav{background:var(--card);border-color:var(--line)}
+ .bottomNav button{background:var(--card);color:var(--muted)}
+ .bottomNav button.on{color:var(--dark);background:var(--soft)}
+ .sheetModal{background:var(--bg)}
+ .printdialog{background:var(--card)}
+ .legacyBack{background:var(--accent);color:#fff;box-shadow:0 4px 12px rgba(109,61,245,.22)}
+ .tabs button{flex:1}
+ .court{position:relative;overflow:hidden}
+ .court:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,var(--accent),#a786ff)}
+ .game{border:1px solid var(--line);border-radius:13px;padding:10px;margin-top:8px;background:#fcfbff}
+ .game:first-of-type{border-top:1px solid var(--line)}
+ .score{background:var(--soft);color:var(--text);border-color:#d9ccff;font-weight:800}
+ .score:focus{outline:2px solid var(--accent);outline-offset:1px}
+ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+ button:disabled{opacity:.48;cursor:not-allowed}
+ .score:disabled{opacity:.7}
+ #standings thead{background:#faf8ff}
+ #standings th{color:var(--muted);font-weight:700}
+ .winnersPanel{background:#f7f3ff;border-color:var(--line)}
+ .winnerGroup,.myrow{border-color:var(--line)}
+ .roundnav button{background:var(--soft);color:var(--dark);border-color:#d9ccff}
+ .dots{background:transparent;border:0}
+ .dangerText{color:#a33}
+}
+@media screen and (max-width:720px){
+ .card,.tourCard,.listCard{border-radius:16px}
+ .tabs{gap:6px}
+ .tabs button{flex:1 1 auto}
+}
+</style>
 </head>
 <body>
 <div id="appShell">
@@ -84,7 +134,7 @@ body.legacyMode #legacyApp header .head .brand>img.brandmark{display:block!impor
   <section id="playersPage" class="shellPage"><div class="pageHead"><h2>Игроки</h2></div><div id="playerList"></div></section>
   <section id="teamsPage" class="shellPage"><div class="pageHead"><h2>Команды</h2></div><div id="teamList"></div></section>
  </main>
- <button id="tourFab" class="fab" onclick="openTourModal()">+</button><button id="playerFab" class="fab" style="display:none" onclick="openPlayerModal()">+</button><button id="teamFab" class="fab" style="display:none" onclick="openTeamModal()">+</button>
+ <button id="tourFab" class="fab" aria-label="Создать турнир" onclick="openTourModal()">+</button><button id="playerFab" class="fab" aria-label="Добавить игрока" style="display:none" onclick="openPlayerModal()">+</button><button id="teamFab" class="fab" aria-label="Добавить команду" style="display:none" onclick="openTeamModal()">+</button>
  <nav class="bottomNav"><button class="on" data-page="homePage">Главная</button><button data-page="playersPage">Игроки</button><button data-page="teamsPage">Команды</button></nav>
 </div>
 <div id="shellModal" class="modalBg" onclick="if(event.target===this)closeShellModal()"><div class="sheetModal" id="modalContent"></div></div>
