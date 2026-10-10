@@ -125,6 +125,16 @@ body.legacyMode #legacyApp header .head .brand>img.brandmark{display:block!impor
  .tabs button{flex:1 1 auto}
 }
 </style>
+
+<style id="desktop-compact-v63">
+/* Compact desktop tournament. Mobile and print retain their layouts. */
+@media screen and (min-width: 900px) {
+  #legacyApp > .wrap { max-width: 900px; margin-inline: auto; }
+  #legacyApp > header .head { max-width: 876px; margin-inline: auto; }
+  .modalBg { align-items: center; justify-content: center; padding: 24px; }
+  .sheetModal { max-width: 640px; border-radius: 22px; }
+}
+</style>
 </head>
 <body>
 <div id="appShell">
@@ -575,12 +585,15 @@ async function joinRemoteTournament(){
     if(remoteTournamentDeleted(rows)){removeCachedTournament(code);alert('Турнир удалён или не найден.');return}
     const st=rows[0].state||{}, t=st.tournament||{name:'Турнир',format:'Карусель',count:16,courts:4};
     t.code=code;
-    t.accessRole='participant';
-    let idx=shellData.tournaments.findIndex(x=>x.code===code);
+    const existing=shellData.tournaments.find(x=>String(x.code)===code);
+    // Never overwrite a previously verified local organizer role merely by joining.
+    // This does not grant new organizer access or recover a lost credential.
+    t.accessRole=existing && existing.accessRole==='admin'?'admin':'participant';
+    let idx=shellData.tournaments.findIndex(x=>String(x.code)===code);
     if(idx<0){shellData.tournaments.unshift(t);idx=0}else shellData.tournaments[idx]=t;
     localStorage.setItem(SHELLKEY,JSON.stringify(shellData));
     closeShellModal();
-    role='participant'; participantUnlocked=true;
+    role=t.accessRole==='admin'?'admin':'participant'; participantUnlocked=role==='participant';
     enterLegacy(idx);
     show('matches');
     if(st.legacy){
@@ -693,11 +706,11 @@ function teamEditMenu(i){let t=shellData.teams[i];modal(`<h2>${escShell(t.a)} / 
 function saveTeamEdit(i){let a=getTeamPerson('teamA'),b=getTeamPerson('teamB');if(!a||!b){alert('Укажите двух участников.');return}if(a===b){alert('Укажите двух разных участников.');return}shellData.teams[i]={a,b,level:document.getElementById('teamLevel').value};shellSave();closeShellModal();renderShell()}
 function delTeam(i){if(confirm('Удалить команду?')){shellData.teams.splice(i,1);shellSave();closeShellModal();renderShell()}}
 function tourMenu(i){modal(`<h2>${escShell(shellData.tournaments[i].name)}</h2><button style="width:100%;text-align:left;margin:5px 0" onclick="editTour(${i})">Редактировать</button><button class="dangerText" style="width:100%;text-align:left;margin:5px 0" onclick="deleteTour(${i})">Удалить</button>`)}
-function editTour(i){let t=shellData.tournaments[i];modal(`<h2>Редактировать турнир</h2><div class="field"><label>Название</label><input id="en" value="${escShell(t.name)}"></div><div class="field"><label>Дата и время</label><input id="ed" type="datetime-local" value="${escShell(t.dateRaw||'')}"></div><div class="field"><label>Количество команд</label><input id="ec" type="number" value="${escShell(t.count)}"></div><div class="field"><label>Количество кортов</label><input id="eco" type="number" value="${escShell(t.courts)}"></div><div class="modalActions"><button onclick="closeShellModal()">Отмена</button><button class="primary" onclick="saveTourEdit(${i})">Сохранить</button></div>`)}function saveTourEdit(i){let t=shellData.tournaments[i];t.name=document.getElementById('en').value.trim()||t.name;let raw=document.getElementById('ed').value;t.dateRaw=raw;t.date=raw?new Date(raw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';t.count=document.getElementById('ec').value;t.courts=document.getElementById('eco').value;shellSave();closeShellModal();renderShell()}
+function editTour(i){let t=shellData.tournaments[i];if(t.accessRole==='participant'){alert('Для редактирования нужны подтверждённые права организатора. Восстановление через пароль будет доступно после настройки защищённой авторизации Supabase.');return;}modal(`<h2>Редактировать турнир</h2><div class="field"><label>Название</label><input id="en" value="${escShell(t.name)}"></div><div class="field"><label>Дата и время</label><input id="ed" type="datetime-local" value="${escShell(t.dateRaw||'')}"></div><div class="field"><label>Количество команд</label><input id="ec" type="number" value="${escShell(t.count)}"></div><div class="field"><label>Количество кортов</label><input id="eco" type="number" value="${escShell(t.courts)}"></div><div class="modalActions"><button onclick="closeShellModal()">Отмена</button><button class="primary" onclick="saveTourEdit(${i})">Сохранить</button></div>`)}function saveTourEdit(i){let t=shellData.tournaments[i];if(!t || t.accessRole==='participant'){alert('Нет прав организатора');return;}t.name=document.getElementById('en').value.trim()||t.name;let raw=document.getElementById('ed').value;t.dateRaw=raw;t.date=raw?new Date(raw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';t.count=document.getElementById('ec').value;t.courts=document.getElementById('eco').value;shellSave();closeShellModal();renderShell()}
 function openTourModal(){modal(`<h2>Создать турнир</h2><div class="field"><label>Название турнира</label><input id="tn" placeholder="Например, Вечерняя карусель"></div><div class="field"><label>Формат</label><select id="tf"><option>Карусель</option><option>Карусель Рандом</option><option>Царь горы</option></select></div><div class="field"><label>Дата и время</label><input id="td" type="datetime-local"></div><div class="field"><label>Количество команд</label><input id="tc" type="number" min="2" value="16"></div><div class="field"><label>Количество кортов</label><input id="tco" type="number" min="1" value="4"></div><div class="modalActions"><button onclick="closeShellModal()">Отмена</button><button class="primary" onclick="addTour()">Создать</button></div>`)}
 function addTour(){let name=document.getElementById('tn').value.trim();if(!name){alert('Введите название турнира.');return}let raw=document.getElementById('td').value;let date=raw?new Date(raw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';shellData.tournaments.unshift({name,format:document.getElementById('tf').value,date,dateRaw:raw,count:document.getElementById('tc').value,courts:document.getElementById('tco').value});shellSave();closeShellModal();renderShell()}
 function tourMenu(i){modal(`<h2>${escShell(shellData.tournaments[i].name)}</h2><button style="width:100%;text-align:left;margin:5px 0" onclick="editTour(${i})">Редактировать</button><button class="dangerText" style="width:100%;text-align:left;margin:5px 0" onclick="deleteTour(${i})">Удалить</button>`)}
-function editTour(i){let t=shellData.tournaments[i];modal(`<h2>Редактировать турнир</h2><div class="field"><label>Название</label><input id="en" value="${escShell(t.name)}"></div><div class="field"><label>Дата и время</label><input id="ed" type="datetime-local" value="${escShell(t.dateRaw||'')}"></div><div class="field"><label>Количество команд</label><input id="ec" type="number" value="${escShell(t.count)}"></div><div class="field"><label>Количество кортов</label><input id="eco" type="number" value="${escShell(t.courts)}"></div><div class="modalActions"><button onclick="closeShellModal()">Отмена</button><button class="primary" onclick="saveTourEdit(${i})">Сохранить</button></div>`)}function saveTourEdit(i){let t=shellData.tournaments[i];t.name=document.getElementById('en').value.trim()||t.name;let raw=document.getElementById('ed').value;t.dateRaw=raw;t.date=raw?new Date(raw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';t.count=document.getElementById('ec').value;t.courts=document.getElementById('eco').value;shellSave();closeShellModal();renderShell()}async function deleteTour(i){
+function editTour(i){let t=shellData.tournaments[i];if(t.accessRole==='participant'){alert('Для редактирования нужны подтверждённые права организатора. Восстановление через пароль будет доступно после настройки защищённой авторизации Supabase.');return;}modal(`<h2>Редактировать турнир</h2><div class="field"><label>Название</label><input id="en" value="${escShell(t.name)}"></div><div class="field"><label>Дата и время</label><input id="ed" type="datetime-local" value="${escShell(t.dateRaw||'')}"></div><div class="field"><label>Количество команд</label><input id="ec" type="number" value="${escShell(t.count)}"></div><div class="field"><label>Количество кортов</label><input id="eco" type="number" value="${escShell(t.courts)}"></div><div class="modalActions"><button onclick="closeShellModal()">Отмена</button><button class="primary" onclick="saveTourEdit(${i})">Сохранить</button></div>`)}function saveTourEdit(i){let t=shellData.tournaments[i];if(!t || t.accessRole==='participant'){alert('Нет прав организатора');return;}t.name=document.getElementById('en').value.trim()||t.name;let raw=document.getElementById('ed').value;t.dateRaw=raw;t.date=raw?new Date(raw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';t.count=document.getElementById('ec').value;t.courts=document.getElementById('eco').value;shellSave();closeShellModal();renderShell()}async function deleteTour(i){
   const t=shellData.tournaments[i];
   if(!t || !confirm(t.accessRole==='participant'?'Убрать турнир из своего списка?':'Удалить турнир у всех участников?'))return;
   const code=String(t.code||'');
@@ -744,8 +757,8 @@ async function addTour(){
    alert('Турнир локально не создан, потому что Supabase не принял запись: '+e.message);
  }
 }
-function editTour(i){let t=shellData.tournaments[i];modal(`<h2>Редактировать турнир</h2><div class="field"><label>Название</label><input id="en" value="${escShell(t.name)}"></div><div class="field"><label>Формат</label><select id="ef" onchange="toggleAwardField('ef','eas')"><option ${t.format==='Карусель'?'selected':''}>Карусель</option><option ${t.format==='Карусель Рандом'?'selected':''}>Карусель Рандом</option><option ${t.format==='Царь горы'?'selected':''}>Царь горы</option></select></div>${awardSchemeField('eas',t.awardScheme||'hard1-3_light4-6')}<div class="field"><label>Дата и время</label><input id="ed" type="datetime-local" value="${escShell(t.dateRaw||'')}"></div><div class="field"><label>Количество команд</label><input id="ec" type="number" value="${escShell(t.count)}"></div><div class="field"><label>Количество кортов</label><input id="eco" type="number" value="${escShell(t.courts)}"></div><div class="modalActions"><button onclick="closeShellModal()">Отмена</button><button class="primary" onclick="saveTourEdit(${i})">Сохранить</button></div>`);toggleAwardField('ef','eas')}
-function saveTourEdit(i){let t=shellData.tournaments[i];t.name=document.getElementById('en').value.trim()||t.name;t.format=document.getElementById('ef').value;let raw=document.getElementById('ed').value;t.dateRaw=raw;t.date=raw?new Date(raw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';t.count=document.getElementById('ec').value;t.courts=document.getElementById('eco').value;t.awardScheme=isCarouselFormat(t.format)?document.getElementById('eas').value:'';shellSave();closeShellModal();renderShell()}
+function editTour(i){let t=shellData.tournaments[i];if(t.accessRole==='participant'){alert('Для редактирования нужны подтверждённые права организатора. Восстановление через пароль будет доступно после настройки защищённой авторизации Supabase.');return;}modal(`<h2>Редактировать турнир</h2><div class="field"><label>Название</label><input id="en" value="${escShell(t.name)}"></div><div class="field"><label>Формат</label><select id="ef" onchange="toggleAwardField('ef','eas')"><option ${t.format==='Карусель'?'selected':''}>Карусель</option><option ${t.format==='Карусель Рандом'?'selected':''}>Карусель Рандом</option><option ${t.format==='Царь горы'?'selected':''}>Царь горы</option></select></div>${awardSchemeField('eas',t.awardScheme||'hard1-3_light4-6')}<div class="field"><label>Дата и время</label><input id="ed" type="datetime-local" value="${escShell(t.dateRaw||'')}"></div><div class="field"><label>Количество команд</label><input id="ec" type="number" value="${escShell(t.count)}"></div><div class="field"><label>Количество кортов</label><input id="eco" type="number" value="${escShell(t.courts)}"></div><div class="modalActions"><button onclick="closeShellModal()">Отмена</button><button class="primary" onclick="saveTourEdit(${i})">Сохранить</button></div>`);toggleAwardField('ef','eas')}
+function saveTourEdit(i){let t=shellData.tournaments[i];if(!t || t.accessRole==='participant'){alert('Нет прав организатора');return;}t.name=document.getElementById('en').value.trim()||t.name;t.format=document.getElementById('ef').value;let raw=document.getElementById('ed').value;t.dateRaw=raw;t.date=raw?new Date(raw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';t.count=document.getElementById('ec').value;t.courts=document.getElementById('eco').value;t.awardScheme=isCarouselFormat(t.format)?document.getElementById('eas').value:'';shellSave();closeShellModal();renderShell()}
 // Reconcile every cached remote tournament, including cards saved by older versions.
 // This also runs while another tournament is open. Errors never remove a card.
 let participantListSyncBusy=false;
@@ -822,6 +835,181 @@ function leaveLegacy(){
   syncParticipantTournamentList();
   window.scrollTo(0,0)
 }
+// V65: organizer recovery. The PIN is checked only in Supabase.
+const WB_TOKEN_KEY='wallball_organizer_session_v65';
+let wbToken=localStorage.getItem(WB_TOKEN_KEY)||'';
+let wbManaged=new Set(['188']);
+let wbSessionChecked=false,wbSessionValid=false,wbLoginBusy=false;
+let wbRecoveryAction=null;
+async function wbRpc(name,args={}){
+  const response=await fetch(SUPABASE_URL+'/rest/v1/rpc/'+name,{
+    method:'POST',cache:'no-store',headers:{apikey:SUPABASE_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify(args)
+  });
+  const result=await response.json().catch(()=>null);
+  if(!response.ok)throw new Error(result?.message||'Не удалось связаться с Supabase.');
+  return result;
+}
+async function wbCheckSession(){
+  if(!wbToken){wbSessionChecked=true;wbSessionValid=false;return false}
+  try{wbSessionValid=(await wbRpc('wb_check_session',{p_token:wbToken}))===true;
+    wbSessionChecked=true;
+    if(!wbSessionValid){wbToken='';localStorage.removeItem(WB_TOKEN_KEY)}
+    return wbSessionValid;
+  }catch(e){wbSessionValid=false;wbSessionChecked=false;throw e}
+}
+async function wbRefreshManaged(){
+  const codes=await wbRpc('wb_managed_codes');
+  if(!Array.isArray(codes))throw new Error('Настройка Supabase не подтверждена.');
+  wbManaged=new Set(codes.map(String));
+  // New tournaments also carry a public marker, never an authorization token.
+  wbManaged.add('188');
+}
+function wbIsManaged(t){return !!t && (wbManaged.has(String(t.code))||t.organizerRecovery==='v65')}
+function wbRequireOrganizer(action){
+  wbRecoveryAction=action;
+  modal(`<h2>Редактировать турнир</h2><p>Режим: участник · Вход организатора</p><p>Введите ваш постоянный код организатора. Код входа участников сюда не подходит.</p><div class="field"><label>Код организатора</label><input id="wbOrganizerPin" type="password" inputmode="numeric" autocomplete="off" maxlength="64"></div><div id="wbLoginError" role="alert" class="dangerText"></div><div class="modalActions"><button onclick="wbCancelLogin()">Отмена</button><button id="wbLoginButton" class="primary" onclick="wbSubmitLogin()">Войти</button></div>`);
+  document.getElementById('wbOrganizerPin')?.focus();
+}
+function wbCancelLogin(){wbRecoveryAction=null;closeShellModal()}
+async function wbSubmitLogin(){
+  if(wbLoginBusy)return;
+  const field=document.getElementById('wbOrganizerPin');
+  const pin=field?.value||'';
+  if(!pin){document.getElementById('wbLoginError').textContent='Введите код организатора.';return}
+  wbLoginBusy=true;document.getElementById('wbLoginButton').disabled=true;
+  try{
+    const result=await wbRpc('wb_login',{p_pin:pin});
+    if(field)field.value='';
+    if(!result?.ok)throw new Error(result?.message||'Неверный код организатора.');
+    wbToken=result.token;wbSessionValid=true;wbSessionChecked=true;
+    localStorage.setItem(WB_TOKEN_KEY,wbToken);
+    await wbRefreshManaged();
+    const action=wbRecoveryAction;wbRecoveryAction=null;closeShellModal();
+    if(action)await action();
+  }catch(e){
+    const el=document.getElementById('wbLoginError');
+    const message=/function.*(not find|does not exist)|schema cache/i.test(e.message)?'Сначала выполните настройку V65 в SQL Editor Supabase.':e.message;
+    if(el)el.textContent=message;else alert(message);
+  }finally{wbLoginBusy=false;const b=document.getElementById('wbLoginButton');if(b)b.disabled=false}
+}
+function wbPromote(i){
+  const t=shellData.tournaments[i];
+  if(!t||!wbIsManaged(t))throw new Error('Этот старый турнир ещё не подключён к восстановлению доступа.');
+  if(!wbSessionValid)throw new Error('Введите код организатора.');
+  t.accessRole='admin';
+  if(currentTournamentIndex===i){role='admin';participantUnlocked=false;updateAccessUI();renderAll()}
+  localStorage.setItem(SHELLKEY,JSON.stringify(shellData));renderShell();
+}
+const wbOriginalEditTour=editTour;
+function wbOpenEditor(i){
+  wbOriginalEditTour(i);
+  const sheet=document.querySelector('#shellModal .sheetModal')||document.querySelector('.modalBg.on .sheetModal');
+  if(sheet){const block=document.createElement('div');block.className='field';
+    block.innerHTML=`<p>Режим: организатор</p><button onclick="wbSwitchMode(${i})">Войти как участник</button>`;sheet.appendChild(block)}
+}
+editTour=async function(i){
+  const t=shellData.tournaments[i];if(!t)return;
+  try{
+    await wbRefreshManaged();
+    if(!wbIsManaged(t)){wbOriginalEditTour(i);return}
+    if(await wbCheckSession()){wbPromote(i);wbOpenEditor(i)}
+    else wbRequireOrganizer(()=>{wbPromote(i);wbOpenEditor(i)});
+  }catch(e){alert('Для восстановления доступа сначала выполните настройку V65 в Supabase. '+e.message)}
+};
+const wbOriginalEnterLegacy=enterLegacy;
+enterLegacy=function(i){
+  const t=shellData.tournaments[i];if(!t)return;
+  // No stale local admin role may unlock protected tournaments.
+  if(wbIsManaged(t)){
+    t.accessRole=wbSessionValid?'admin':'participant';
+  }
+  wbOriginalEnterLegacy(i);
+  if(wbIsManaged(t)&&wbToken)wbCheckSession().then(valid=>{
+    if(currentTournamentIndex!==i)return;
+    if(valid)wbPromote(i);
+    else{t.accessRole='participant';role='participant';participantUnlocked=true;renderAll()}
+  }).catch(()=>{});
+};
+async function wbSwitchMode(i=currentTournamentIndex){
+  const t=shellData.tournaments[i];if(!t)return;
+  if(t.accessRole==='admin'){
+    t.accessRole='participant';
+    if(currentTournamentIndex===i){role='participant';participantUnlocked=true;renderAll()}
+    localStorage.setItem(SHELLKEY,JSON.stringify(shellData));renderShell();closeShellModal();return;
+  }
+  wbRequireOrganizer(()=>{wbPromote(i);wbOpenEditor(i)});
+}
+const wbOriginalSetRole=setRole;
+setRole=function(v){
+  const t=shellData.tournaments[currentTournamentIndex];
+  if(wbIsManaged(t)){if(v==='admin'&&role!=='admin'){wbRequireOrganizer(()=>wbPromote(currentTournamentIndex));return}if(v==='participant'&&role==='admin'){wbSwitchMode();return}}
+  wbOriginalSetRole(v);
+};
+const wbOriginalSupaRequest=supaRequest;
+supaRequest=async function(path='',options={}){
+  const method=(options.method||'GET').toUpperCase();
+  const params=new URLSearchParams(path.replace(/^\?/,''));
+  const code=(params.get('code')||'').replace(/^eq\./,'');
+  const t=shellData.tournaments.find(x=>String(x.code)===code);
+  if(code && (wbManaged.has(code)||wbIsManaged(t)) && ['PATCH','DELETE'].includes(method)){
+    if(method==='DELETE')throw new Error('Удаляйте турнир через подтверждённый вход организатора.');
+    if(!wbSessionValid||!wbToken)throw new Error('Войдите как организатор через «Редактировать».');
+    await wbRpc('wb_save_tournament',{p_token:wbToken,p_code:code,p_state:JSON.parse(options.body).state});
+    return [];
+  }
+  return wbOriginalSupaRequest(path,options);
+};
+const wbOriginalSaveScore=saveParticipantScore;
+saveParticipantScore=async function(r,g){
+  const t=shellData.tournaments[currentTournamentIndex];
+  if(!wbIsManaged(t))return wbOriginalSaveScore(r,g);
+  try{await wbRpc('wb_save_score',{p_code:String(t.code),p_round:r,p_game:g,p_score:(scores[gameKey(r,g)]||['','']).slice()})}
+  catch(e){alert('Счёт не сохранён: '+e.message);await pollRemoteTournament()}
+};
+createRemoteTournament=async function(t){
+  await wbRefreshManaged();
+  if(!await wbCheckSession())throw new Error('Сначала войдите как организатор.');
+  t.organizerRecovery='v65';
+  const code=await wbRpc('wb_create_tournament',{p_token:wbToken,p_state:{tournament:t,legacy:null}});
+  t.code=String(code);wbManaged.add(t.code);return t.code;
+};
+const wbOriginalOpenTourModal=openTourModal;
+openTourModal=async function(){
+  try{
+    await wbRefreshManaged();
+    if(await wbCheckSession())wbOriginalOpenTourModal();
+    else wbRequireOrganizer(()=>wbOriginalOpenTourModal());
+  }catch(e){alert('Сначала выполните настройку V65 в Supabase. '+e.message)}
+};
+// Editing the card must save its metadata even when no tournament is open.
+const wbOriginalSaveTourEdit=saveTourEdit;
+saveTourEdit=async function(i){
+  const t=shellData.tournaments[i];
+  if(!wbIsManaged(t))return wbOriginalSaveTourEdit(i);
+  if(!wbSessionValid){await editTour(i);return}
+  const next=Object.assign({},t,{name:document.getElementById('en').value.trim()||t.name,
+    format:document.getElementById('ef').value,dateRaw:document.getElementById('ed').value,
+    count:document.getElementById('ec').value,courts:document.getElementById('eco').value});
+  next.date=next.dateRaw?new Date(next.dateRaw).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+  next.awardScheme=isCarouselFormat(next.format)?document.getElementById('eas').value:'';
+  try{
+    const rows=await wbOriginalSupaRequest('?code=eq.'+encodeURIComponent(t.code)+'&select=state&limit=1');
+    if(remoteTournamentDeleted(rows))throw new Error('Турнир удалён или не найден.');
+    const state=rows[0].state;
+    state.tournament=Object.assign({},state.tournament,next);
+    delete state.tournament.legacyState;delete state.tournament.liveTeams;
+    await wbRpc('wb_save_tournament',{p_token:wbToken,p_code:String(t.code),p_state:state});
+    Object.assign(t,next);localStorage.setItem(SHELLKEY,JSON.stringify(shellData));closeShellModal();renderShell();
+  }catch(e){alert('Изменения не сохранены: '+e.message)}
+};
+// Initial discovery is read-only; never changes tournament 188 data.
+wbRefreshManaged().then(async()=>{
+  await wbCheckSession();
+  for(const t of shellData.tournaments)if(wbIsManaged(t)&&!wbSessionValid)t.accessRole='participant';
+  localStorage.setItem(SHELLKEY,JSON.stringify(shellData));renderShell();
+}).catch(()=>{});
+
 renderShell();
 syncParticipantTournamentList();
 loadShellRemote();
